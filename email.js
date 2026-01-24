@@ -29,7 +29,7 @@ const mailOptions = {
 };
 
 // Envoi de l'e-mail
-cron.schedule('*/1 * * * *', () => {
+//cron.schedule('*/1 * * * *', () => {
     transporter.sendMail(mailOptions, (error, info) => {
         if (error) {
             console.error('Erreur lors de l\'envoi de l\'e-mail :', error);
@@ -37,4 +37,4 @@ cron.schedule('*/1 * * * *', () => {
             console.log('E-mail envoyé avec succès :', info.response);
         }
     });
-});
+//});
