@@ -5,14 +5,14 @@ const cron = require('node-cron');
 
 // Configuration du transporteur SMTP
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
+    host: 'smtp.sendgrid.net',
+    port: 587,
    // secure: true,
    // logger: true,
     secureConnection: true,
     auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
+        user: apikey,
+        pass: process.env.SENDGRID_API_KEY,
     },
     tls: {
         rejectUnauthorized: false,
