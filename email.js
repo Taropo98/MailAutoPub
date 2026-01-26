@@ -3,13 +3,19 @@ require('dotenv').config();
 const nodemailer = require('nodemailer');
 const cron = require('node-cron');
 
+// Vérifier que la clé API est présente
+if (!process.env.SENDGRID_API_KEY) {
+    console.error('❌ ERREUR : SENDGRID_API_KEY n\'est pas définie dans les variables d\'environnement');
+    process.exit(1);
+}
+
 // Configuration du transporteur SMTP
 const transporter = nodemailer.createTransport({
     host: 'smtp.sendgrid.net',
     port: 587,
    // secure: true,
    // logger: true,
-    secureConnection: false,
+    secure: false,
     auth: {
         user: 'apikey',
         pass: process.env.SENDGRID_API_KEY,
