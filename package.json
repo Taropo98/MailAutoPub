@@ -1,8 +1,23 @@
 {
+  "name": "mailauto",
+  "version": "1.0.0",
+  "description": "Application d'envoi d'e-mails automatisés avec SendGrid",
+  "main": "email.js",
+  "scripts": {
+    "start": "node email.js",
+    "dev": "node email.js"
+  },
+  "keywords": [
+    "email",
+    "sendgrid",
+    "cron",
+    "automation"
+  ],
+  "author": "Diego",
+  "license": "MIT",
   "dependencies": {
     "@sendgrid/mail": "^8.1.6",
     "dotenv": "^17.2.3",
-    "node-cron": "^4.2.1",
-    "nodemailer": "^7.0.12"
+    "node-cron": "^4.2.1"
   }
 }
