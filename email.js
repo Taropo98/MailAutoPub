@@ -23,11 +23,12 @@ const WEATHER_CITY = process.env.WEATHER_CITY || 'Lyon'; // Ville par défaut
 const WEATHER_COUNTRY_CODE = process.env.WEATHER_COUNTRY_CODE || 'FR'; // Code pays
 const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY;
 const OPENWEATHER_URL = 'https://api.openweathermap.org/data/2.5/weather';
+const FORECAST_URL = 'https://api.openweathermap.org/data/2.5/forecast';
 
 // Fonction pour récupérer la météo
 async function getWeather() {
     try {
-        const response = await axios.get(OPENWEATHER_URL, {
+        const weatherResponse  = await axios.get(OPENWEATHER_URL, {
             params: {
                 q: `${WEATHER_CITY},${WEATHER_COUNTRY_CODE}`,
                 appid: OPENWEATHER_API_KEY,
@@ -36,34 +37,178 @@ async function getWeather() {
             },
         });
 
-        const data = response.data;
-        return {
-            city: data.name,
-            country: data.sys.country,
-            temperature: Math.round(data.main.temp),
-            feelsLike: Math.round(data.main.feels_like),
-            humidity: data.main.humidity,
-            pressure: data.main.pressure,
-            description: data.weather[0].description,
-            windSpeed: Math.round(data.wind.speed * 3.6), // Conversion m/s en km/h
-            cloudiness: data.clouds.all,
-            sunrise: new Date(data.sys.sunrise * 1000).toLocaleTimeString('fr-FR'),
-            sunset: new Date(data.sys.sunset * 1000).toLocaleTimeString('fr-FR'),
+        const forecastResponse = await axios.get(FORECAST_URL, {
+            params: {
+                q: `${WEATHER_CITY},${WEATHER_COUNTRY_CODE}`,
+                appid: OPENWEATHER_API_KEY,
+                units: 'metric', // Pour avoir les degrés Celsius
+                lang: 'fr', // Pour les descriptions en français
+            },
+        });
+
+        const weatherData = weatherResponse.data;
+        const forecastData = forecastResponse.data;
+
+        // Traiter les données actuelles
+        const current = {
+            city: weatherData.name,
+            country: weatherData.sys.country,
+            temperature: Math.round(weatherData.main.temp),
+            feelsLike: Math.round(weatherData.main.feels_like),
+            humidity: weatherData.main.humidity,
+            pressure: weatherData.main.pressure,
+            description: weatherData.weather[0].description,
+            windSpeed: Math.round(weatherData.wind.speed * 3.6), // Conversion m/s en km/h
+            cloudiness: weatherData.clouds.all,
+            sunrise: new Date(weatherData.sys.sunrise * 1000).toLocaleTimeString('fr-FR'),
+            sunset: new Date(weatherData.sys.sunset * 1000).toLocaleTimeString('fr-FR'),
         };
+
+        // Traiter les prévisions pour le jour
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const todayForecasts = forecastData.list.filter(item => {
+            const itemDate = new Date(item.dt * 1000);
+            itemDate.setHours(0, 0, 0, 0);
+            return itemDate.getTime() === today.getTime();
+        });
+
+        // Préparer les données pour le graphique
+        const chartData = {
+            labels: [],
+            temperatures: [],
+            humidity: [],
+            windSpeed: [],
+            rainChance: [],
+        };
+
+        todayForecasts.forEach(item => {
+            const time = new Date(item.dt * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+            chartData.labels.push(time);
+            chartData.temperatures.push(Math.round(item.main.temp));
+            chartData.humidity.push(item.main.humidity);
+            chartData.windSpeed.push(Math.round(item.wind.speed * 3.6));
+            chartData.rainChance.push((item.pop * 100).toFixed(0));
+        });
+
+        // Extraire les prévisions clés : matin (6h), après-midi (12h), soir (18h)
+        const forecasts = {
+            morning: null,
+            afternoon: null,
+            evening: null,
+            minTemp: todayForecasts.length > 0 ? Math.round(Math.min(...todayForecasts.map(f => f.main.temp_min))) : 'N/A',
+            maxTemp: todayForecasts.length > 0 ? Math.round(Math.max(...todayForecasts.map(f => f.main.temp_max))) : 'N/A',
+        };
+        // Chercher les prévisions les plus proches des heures clés
+        todayForecasts.forEach(item => {
+            const hour = new Date(item.dt * 1000).getHours();
+            
+            if (hour >= 6 && hour < 12 && !forecasts.morning) {
+                forecasts.morning = {
+                    time: new Date(item.dt * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+                    temp: Math.round(item.main.temp),
+                    description: item.weather[0].description,
+                    windSpeed: Math.round(item.wind.speed * 3.6),
+                    humidity: item.main.humidity,
+                    rainChance: (item.pop * 100).toFixed(0),
+                };
+            }
+            
+            if (hour >= 12 && hour < 18 && !forecasts.afternoon) {
+                forecasts.afternoon = {
+                    time: new Date(item.dt * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+                    temp: Math.round(item.main.temp),
+                    description: item.weather[0].description,
+                    windSpeed: Math.round(item.wind.speed * 3.6),
+                    humidity: item.main.humidity,
+                    rainChance: (item.pop * 100).toFixed(0),
+                };
+            }
+            
+            if (hour >= 18 && hour < 24 && !forecasts.evening) {
+                forecasts.evening = {
+                    time: new Date(item.dt * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+                    temp: Math.round(item.main.temp),
+                    description: item.weather[0].description,
+                    windSpeed: Math.round(item.wind.speed * 3.6),
+                    humidity: item.main.humidity,
+                    rainChance: (item.pop * 100).toFixed(0),
+                };
+            }
+        });
+
+    return { current, forecasts, chartData };
+    
     } catch (error) {
         console.error('❌ Erreur lors de la récupération de la météo :', error.message);
         throw error;
     }
 }
 
+// Fonction pour créer un graphique HTML
+function createHTMLChart(chartData) {
+    if (chartData.temperatures.length === 0) {
+        return '<p style="color: #999; text-align: center;">Pas de données de prévisions disponibles</p>';
+    }
+
+    const maxTemp = Math.max(...chartData.temperatures);
+    const minTemp = Math.min(...chartData.temperatures);
+    const tempRange = maxTemp - minTemp || 1;
+    const chartHeight = 200;
+    const barWidth = 100 / chartData.labels.length;
+
+    let svg = `
+    <svg width="100%" height="${chartHeight + 50}" viewBox="0 0 800 ${chartHeight + 50}" style="margin: 20px 0;">
+        <!-- Grille de fond -->
+        <defs>
+            <pattern id="grid" width="80" height="40" patternUnits="userSpaceOnUse">
+                <path d="M 80 0 L 0 0 0 40" fill="none" stroke="#eee" stroke-width="0.5"/>
+            </pattern>
+        </defs>
+        <rect width="800" height="${chartHeight}" fill="url(#grid)" />
+        
+        <!-- Axe Y (température) -->
+        <line x1="40" y1="0" x2="40" y2="${chartHeight}" stroke="#333" stroke-width="2"/>
+        <line x1="40" y1="${chartHeight}" x2="800" y2="${chartHeight}" stroke="#333" stroke-width="2"/>
+        
+        <!-- Labels Y -->
+        <text x="35" y="15" font-size="12" text-anchor="end" fill="#666">${maxTemp}°C</text>
+        <text x="35" y="${chartHeight - 5}" font-size="12" text-anchor="end" fill="#666">${minTemp}°C</text>
+        
+        <!-- Barres de température -->
+    `;
+
+    chartData.temperatures.forEach((temp, index) => {
+        const normalizedTemp = (temp - minTemp) / tempRange;
+        const barHeight = normalizedTemp * chartHeight;
+        const x = 50 + (index * (750 / chartData.temperatures.length));
+        const y = chartHeight - barHeight;
+        const color = temp > 15 ? '#ff6b6b' : temp > 10 ? '#ffa500' : '#667eea';
+
+        svg += `
+            <rect x="${x}" y="${y}" width="${Math.max(750 / chartData.temperatures.length - 2, 5)}" height="${barHeight}" fill="${color}" opacity="0.7" />
+            <text x="${x + (750 / chartData.temperatures.length / 2)}" y="${chartHeight + 20}" font-size="10" text-anchor="middle" fill="#666">${chartData.labels[index]}</text>
+            <text x="${x + (750 / chartData.temperatures.length / 2)}" y="${y - 5}" font-size="11" font-weight="bold" text-anchor="middle" fill="#333">${temp}°</text>
+        `;
+    });
+
+    svg += `</svg>`;
+    return svg;
+}
+
 // Fonction pour créer le contenu HTML de l'e-mail
-function createWeatherEmail(weather) {
+function createWeatherEmail(data) {
+    const { current, forecasts, chartData } = data;
+    const chartHTML = createHTMLChart(chartData);
     const html = `
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="UTF-8">
-                <style>
+        <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
@@ -96,56 +241,112 @@ function createWeatherEmail(weather) {
                 font-size: 16px; 
                 opacity: 0.9;
             }
-            .weather-main { 
-                display: flex; 
-                justify-content: space-between; 
-                margin: 30px 0; 
-                gap: 20px;
+            .section-title {
+                font-size: 18px;
+                font-weight: bold;
+                color: #333;
+                margin: 25px 0 15px 0;
+                padding-bottom: 10px;
+                border-bottom: 2px solid #667eea;
             }
-            .weather-item { 
-                flex: 1; 
+            .current-weather {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                margin: 20px 0;
+            }
+            .current-weather .temp {
+                font-size: 48px;
+                font-weight: bold;
+                margin: 10px 0;
+            }
+            .current-weather .description {
+                font-size: 18px;
+                text-transform: capitalize;
+                margin: 10px 0;
+            }
+            .chart-container {
+                margin: 20px 0;
+                background-color: #f9f9f9;
+                padding: 15px;
+                border-radius: 10px;
+                overflow-x: auto;
+            }
+            .forecast-container {
+                display: flex;
+                gap: 15px;
+                margin: 20px 0;
+            }
+            .forecast-item {
+                flex: 1;
+                background-color: #f9f9f9;
+                padding: 15px;
+                border-radius: 10px;
+                text-align: center;
+                border: 1px solid #eee;
+            }
+            .forecast-item .time {
+                font-weight: bold;
+                color: #667eea;
+                font-size: 14px;
+                margin-bottom: 10px;
+            }
+            .forecast-item .temp {
+                font-size: 24px;
+                font-weight: bold;
+                color: #333;
+                margin: 10px 0;
+            }
+            .forecast-item .description {
+                font-size: 12px;
+                color: #666;
+                text-transform: capitalize;
+                margin: 8px 0;
+            }
+            .forecast-item .detail {
+                font-size: 11px;
+                color: #999;
+                margin: 5px 0;
+            }
+            .temp-range {
+                background-color: #f0f0f0;
+                padding: 15px;
+                border-radius: 10px;
+                margin: 20px 0;
                 text-align: center;
             }
-            .weather-item .label { 
-                color: #666; 
-                font-size: 11px; 
-                text-transform: uppercase; 
-                letter-spacing: 1px;
-                margin-bottom: 8px;
-                display: block;
+            .temp-range .label {
+                font-size: 12px;
+                color: #666;
+                text-transform: uppercase;
+                margin-bottom: 10px;
             }
-            .weather-item .value { 
-                font-size: 28px; 
-                font-weight: bold; 
-                color: #333; 
-                margin-bottom: 15px;
-                display: block;
+            .temp-range .temps {
+                font-size: 28px;
+                font-weight: bold;
+                color: #333;
             }
-            .weather-details { 
-                background-color: #f9f9f9; 
-                padding: 25px; 
-                border-radius: 10px; 
-                margin: 30px 0;
+            .details-table {
+                width: 100%;
+                margin: 20px 0;
             }
-            .detail-row { 
-                display: flex; 
-                justify-content: space-between; 
-                align-items: center;
-                padding: 15px 0; 
+            .details-table tr {
                 border-bottom: 1px solid #eee;
             }
-            .detail-row:last-child { 
-                border-bottom: none; 
+            .details-table td {
+                padding: 12px 0;
             }
-            .detail-label { 
-                color: #666; 
+            .details-table .label {
+                color: #666;
                 font-weight: 600;
                 font-size: 14px;
             }
-            .detail-value { 
-                color: #333; 
+            .details-table .value {
+                color: #333;
                 font-weight: 500;
                 font-size: 14px;
+                text-align: right;
             }
             .footer { 
                 text-align: center; 
@@ -164,77 +365,95 @@ function createWeatherEmail(weather) {
         <div class="container">
             <div class="header">
                 <h1>🌤️ Météo du jour</h1>
-                <p>${weather.city}, ${weather.country}</p>
+                <p>${current.city}, ${current.country}</p>
             </div>
 
-            <div class="weather-main">
-                <div class="weather-item">
-                    <span class="label">Température</span>
-                    <span class="value">${weather.temperature}°C</span>
-                    <span class="label">Ressenti</span>
-                    <span class="value">${weather.feelsLike}°C</span>
-                    <span class="label">Conditions</span>
-                    <span class="value" style="text-transform: capitalize; font-size: 18px;">${weather.description}</span>
+            <!-- Météo actuelle -->
+            <div class="current-weather">
+                <div style="font-size: 14px; opacity: 0.9;">Conditions actuelles</div>
+                <div class="temp">${current.temperature}°C</div>
+                <div class="description">${current.description}</div>
+                <div style="font-size: 13px; margin-top: 10px;">Ressenti : ${current.feelsLike}°C</div>
+            </div>
+
+            <!-- Graphique -->
+            <div class="section-title">📈 Évolution de la journée</div>
+            <div class="chart-container">
+                ${chartHTML}
+            </div>
+
+            <!-- Prévisions de la journée -->
+            <div class="section-title">📅 Prévisions de la journée</div>
+            <div class="forecast-container">
+                ${forecasts.morning ? `
+                <div class="forecast-item">
+                    <div class="time">🌅 Matin</div>
+                    <div class="time">${forecasts.morning.time}</div>
+                    <div class="temp">${forecasts.morning.temp}°C</div>
+                    <div class="description">${forecasts.morning.description}</div>
+                    <div class="detail">💧 ${forecasts.morning.humidity}%</div>
+                    <div class="detail">💨 ${forecasts.morning.windSpeed} km/h</div>
+                    <div class="detail">🌧️ ${forecasts.morning.rainChance}% pluie</div>
                 </div>
+                ` : '<div class="forecast-item"><p style="color: #999;">Pas de données</p></div>'}
+                ${forecasts.afternoon ? `
+                <div class="forecast-item">
+                    <div class="time">☀️ Après-midi</div>
+                    <div class="time">${forecasts.afternoon.time}</div>
+                    <div class="temp">${forecasts.afternoon.temp}°C</div>
+                    <div class="description">${forecasts.afternoon.description}</div>
+                    <div class="detail">💧 ${forecasts.afternoon.humidity}%</div>
+                    <div class="detail">💨 ${forecasts.afternoon.windSpeed} km/h</div>
+                    <div class="detail">🌧️ ${forecasts.afternoon.rainChance}% pluie</div>
+                </div>
+                ` : '<div class="forecast-item"><p style="color: #999;">Pas de données</p></div>'}
+                ${forecasts.evening ? `
+                <div class="forecast-item">
+                    <div class="time">🌆 Soir</div>
+                    <div class="time">${forecasts.evening.time}</div>
+                    <div class="temp">${forecasts.evening.temp}°C</div>
+                    <div class="description">${forecasts.evening.description}</div>
+                    <div class="detail">💧 ${forecasts.evening.humidity}%</div>
+                    <div class="detail">💨 ${forecasts.evening.windSpeed} km/h</div>
+                    <div class="detail">🌧️ ${forecasts.evening.rainChance}% pluie</div>
+                </div>
+                ` : '<div class="forecast-item"><p style="color: #999;">Pas de données</p></div>'}
             </div>
 
-            <div class="weather-details">
-                <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
-                    <tr>
-                        <td style="padding: 12px 0; border-bottom: 1px solid #eee;">
-                            <span class="detail-label">💧 Humidité</span>
-                        </td>
-                        <td align="right" style="padding: 12px 0; border-bottom: 1px solid #eee;">
-                            <span class="detail-value">${weather.humidity}%</span>
-                        </td>
-                    </tr>
-            
-                    <tr>
-                        <td style="padding: 12px 0; border-bottom: 1px solid #eee;">
-                            <span class="detail-label">💨 Vitesse du vent</span>
-                        </td>
-                        <td align="right" style="padding: 12px 0; border-bottom: 1px solid #eee;">
-                            <span class="detail-value">${weather.windSpeed} km/h</span>
-                        </td>
-                    </tr>
-            
-                    <tr>
-                        <td style="padding: 12px 0; border-bottom: 1px solid #eee;">
-                            <span class="detail-label">🌫️ Pression</span>
-                        </td>
-                        <td align="right" style="padding: 12px 0; border-bottom: 1px solid #eee;">
-                            <span class="detail-value">${weather.pressure} hPa</span>
-                        </td>
-                    </tr>
-            
-                    <tr>
-                        <td style="padding: 12px 0; border-bottom: 1px solid #eee;">
-                            <span class="detail-label">☁️ Couverture nuageuse</span>
-                        </td>
-                        <td align="right" style="padding: 12px 0; border-bottom: 1px solid #eee;">
-                            <span class="detail-value">${weather.cloudiness}%</span>
-                        </td>
-                    </tr>
-            
-                    <tr>
-                        <td style="padding: 12px 0; border-bottom: 1px solid #eee;">
-                            <span class="detail-label">🌅 Lever du soleil</span>
-                        </td>
-                        <td align="right" style="padding: 12px 0; border-bottom: 1px solid #eee;">
-                            <span class="detail-value">${weather.sunrise}</span>
-                        </td>
-                    </tr>
-            
-                    <tr>
-                        <td style="padding: 12px 0;">
-                            <span class="detail-label">🌇 Coucher du soleil</span>
-                        </td>
-                        <td align="right" style="padding: 12px 0;">
-                            <span class="detail-value">${weather.sunset}</span>
-                        </td>
-                    </tr>
-                </table>
+            <!-- Températures min/max -->
+            <div class="temp-range">
+                <div class="label">Températures du jour</div>
+                <div class="temps">Min: ${forecasts.minTemp}°C | Max: ${forecasts.maxTemp}°C</div>
             </div>
+
+            <!-- Détails supplémentaires -->
+            <div class="section-title">📊 Détails</div>
+            <table class="details-table" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                    <td class="label">💧 Humidité</td>
+                    <td class="value">${current.humidity}%</td>
+                </tr>
+                <tr>
+                    <td class="label">💨 Vitesse du vent</td>
+                    <td class="value">${current.windSpeed} km/h</td>
+                </tr>
+                <tr>
+                    <td class="label">🌫️ Pression</td>
+                    <td class="value">${current.pressure} hPa</td>
+                </tr>
+                <tr>
+                    <td class="label">☁️ Couverture nuageuse</td>
+                    <td class="value">${current.cloudiness}%</td>
+                </tr>
+                <tr>
+                    <td class="label">🌅 Lever du soleil</td>
+                    <td class="value">${current.sunrise}</td>
+                </tr>
+                <tr>
+                    <td class="label">🌇 Coucher du soleil</td>
+                    <td class="value">${current.sunset}</td>
+                </tr>
+            </table>
 
             <div class="footer">
                 <p>Données fournies par OpenWeatherMap</p>
@@ -244,7 +463,6 @@ function createWeatherEmail(weather) {
     </body>
     </html>
     `;
-
     return html;
 }
 
@@ -252,15 +470,15 @@ function createWeatherEmail(weather) {
 
 // Planifier l'envoi d'e-mail toutes les minutes
 // Format cron : seconde minute heure jour mois jour_de_semaine
-// '*/1 * * * *' = toutes les minutes
-cron.schedule('*/1 * * * *', async () => {
+// '0 8 * * *' = 8h00 tous les jours
+cron.schedule('0 8 * * * ', async () => {
     console.log(`[${new Date().toISOString()}] Tentative d'envoi d'e-mail...`);
     
     try {
 
         // Récupérer la météo
         const weather = await getWeather();
-        console.log(`[${new Date().toISOString()}] ✅ Météo récupérée : ${weather.temperature}°C à ${weather.city}`);
+        console.log(`[${new Date().toISOString()}] ✅ Météo récupérée : ${weather.current.temperature}°C à ${weather.current.city}`);
 
         // Créer le contenu HTML
         const htmlContent = createWeatherEmail(weather);
@@ -269,8 +487,8 @@ cron.schedule('*/1 * * * *', async () => {
         const mailOptions = {
             to: 'diegotar005@gmail.com',
             from: 'diegotar005@gmail.com', // Doit être une adresse vérifiée sur SendGrid
-           subject: `Météo du jour – ${weather.city} : ${weather.temperature}°C`,
-            text: 'Météo à ${weather.city}: ${weather.temperature}°C, ${weather.description}',
+            subject: `Météo du jour – ${weather.current.city} : ${weather.current.temperature}°C`,
+            text: `Météo à ${weather.current.city}: ${weather.current.temperature}°C, ${weather.current.description}`,
             html: htmlContent,
         };
 
