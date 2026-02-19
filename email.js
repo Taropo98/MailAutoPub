@@ -485,8 +485,8 @@ cron.schedule('0 8 * * * ', async () => {
 
         // Options de l'e-mail
         const mailOptions = {
-            to: 'diegotar005@gmail.com',
-            from: 'diegotar005@gmail.com', // Doit être une adresse vérifiée sur SendGrid
+            to: 'MAIL',
+            from: 'MAIL', // Doit être une adresse vérifiée sur SendGrid
             subject: `Météo du jour – ${weather.current.city} : ${weather.current.temperature}°C`,
             text: `Météo à ${weather.current.city}: ${weather.current.temperature}°C, ${weather.current.description}`,
             html: htmlContent,
