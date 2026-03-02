@@ -468,7 +468,6 @@ function createWeatherEmail(data) {
 
 
 
-// Planifier l'envoi d'e-mail toutes les minutes
 // Format cron : seconde minute heure jour mois jour_de_semaine
 // '0 8 * * *' = 8h00 tous les jours
 cron.schedule('0 8 * * * ', async () => {
